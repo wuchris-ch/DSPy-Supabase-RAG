@@ -1,0 +1,61 @@
+# DSPy Supabase RAG Pipeline
+# ===========================
+# Compatible with pip and uv
+#
+# Install with uv (recommended - 10-100x faster):
+#   uv pip install -r requirements.txt
+#
+# Install with pip:
+#   pip install -r requirements.txt
+
+# ─────────────────────────────────────────────────────────────────
+# Core Framework
+# ─────────────────────────────────────────────────────────────────
+dspy-ai>=3.0.4
+python-dotenv>=1.0.0
+
+# ─────────────────────────────────────────────────────────────────
+# Document Processing (Docling)
+# ─────────────────────────────────────────────────────────────────
+docling>=2.0.0
+docling-core>=2.0.0
+
+# OCR Support - uncomment the one you want:
+# easyocr>=1.7.0          # Recommended: good multilingual, GPU support
+# pytesseract>=0.3.10     # Alternative: needs tesseract installed
+# rapidocr-onnxruntime    # Lightweight option
+
+# ─────────────────────────────────────────────────────────────────
+# Embeddings & Vector Search
+# ─────────────────────────────────────────────────────────────────
+sentence-transformers>=2.2.0
+numpy>=1.24.0
+
+# ─────────────────────────────────────────────────────────────────
+# Supabase (Vector Store)
+# ─────────────────────────────────────────────────────────────────
+supabase>=2.0.0
+
+# ─────────────────────────────────────────────────────────────────
+# Hybrid Retrieval & Reranking
+# ─────────────────────────────────────────────────────────────────
+rank-bm25>=0.2.2
+cohere>=5.0.0
+
+# ─────────────────────────────────────────────────────────────────
+# LLM Providers
+# ─────────────────────────────────────────────────────────────────
+groq>=0.4.0
+# google-generativeai>=0.5.0  # Alternative: Gemini
+
+# ─────────────────────────────────────────────────────────────────
+# Evaluation (RAGAS)
+# ─────────────────────────────────────────────────────────────────
+ragas>=0.1.0
+datasets>=2.14.0
+langchain-openai>=0.0.5
+
+# ─────────────────────────────────────────────────────────────────
+# Utilities
+# ─────────────────────────────────────────────────────────────────
+tqdm>=4.65.0

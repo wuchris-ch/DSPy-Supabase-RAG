@@ -1,0 +1,88 @@
+[
+  {
+    "question": "What is Docling and what is its primary purpose?",
+    "expected_answer": "Docling is an open-source document processing library developed by IBM that converts various document formats like PDFs, DOCX, and presentations into clean, structured data. Its primary purpose is to transform complex documents into machine-readable formats optimized for use in Generative AI applications, particularly RAG systems."
+  },
+  {
+    "question": "What document formats does Docling support?",
+    "expected_answer": "Docling supports multiple document formats including PDF, DOCX (Microsoft Word), PPTX (PowerPoint presentations), images, HTML, and AsciiDoc. It can handle both native digital documents and scanned documents through OCR."
+  },
+  {
+    "question": "How does Docling handle tables in documents?",
+    "expected_answer": "Docling uses TableFormer, a deep learning model, to detect and extract table structures from documents. It identifies table cells, rows, columns, and headers, preserving the semantic structure of tables and converting them into structured formats that can be used for downstream processing."
+  },
+  {
+    "question": "What OCR capabilities does Docling provide?",
+    "expected_answer": "Docling provides OCR (Optical Character Recognition) capabilities for processing scanned documents and images. It supports multiple OCR engines including EasyOCR, OCRMac (for macOS), RapidOCR, and Tesseract, allowing it to extract text from non-native PDF documents and images."
+  },
+  {
+    "question": "What is RAG and why was it developed?",
+    "expected_answer": "RAG (Retrieval-Augmented Generation) is a technique that combines information retrieval with text generation to enhance large language model responses. It was developed to address limitations of parametric-only models, including their inability to access up-to-date information, tendency to hallucinate facts, and difficulty with knowledge-intensive tasks."
+  },
+  {
+    "question": "What are the two main components of the RAG architecture?",
+    "expected_answer": "The two main components of RAG are: 1) A retriever that searches for relevant documents or passages from a knowledge base, typically using dense passage retrieval (DPR), and 2) A generator (like BART or other seq2seq models) that produces the final response conditioned on both the input query and the retrieved context."
+  },
+  {
+    "question": "How does RAG reduce hallucinations in language models?",
+    "expected_answer": "RAG reduces hallucinations by grounding the model's responses in retrieved factual evidence from external knowledge sources. Instead of relying solely on parametric knowledge learned during training, the model can reference and cite specific passages, making responses more accurate and verifiable."
+  },
+  {
+    "question": "What is Dense Passage Retrieval (DPR) in the context of RAG?",
+    "expected_answer": "Dense Passage Retrieval (DPR) is a neural retrieval method used in RAG that encodes both queries and documents into dense vector representations. It uses dual BERT encoders to create embeddings, enabling semantic similarity search that can find relevant passages even when there is no exact lexical match with the query."
+  },
+  {
+    "question": "What types of knowledge-intensive tasks does RAG excel at?",
+    "expected_answer": "RAG excels at knowledge-intensive tasks including open-domain question answering, fact verification, knowledge-grounded dialogue, entity linking, and slot filling. These are tasks that require accessing and reasoning over large amounts of factual information that may not be captured in the model's parameters."
+  },
+  {
+    "question": "What is the difference between RAG-Sequence and RAG-Token models?",
+    "expected_answer": "RAG-Sequence uses the same retrieved documents for generating the entire output sequence, treating the retrieved passages as a single latent variable. RAG-Token allows different documents to be used for generating different tokens, providing more flexibility by marginalizing over documents at each generation step."
+  },
+  {
+    "question": "How does Docling handle document layout analysis?",
+    "expected_answer": "Docling uses deep learning models for document layout analysis to identify and classify different elements on a page, including headers, paragraphs, lists, tables, figures, and captions. This structural understanding allows it to preserve document hierarchy and semantic organization in the output."
+  },
+  {
+    "question": "What output formats can Docling generate?",
+    "expected_answer": "Docling can export documents to multiple structured formats including Markdown, JSON, and its native DoclingDocument format. These outputs preserve the document structure including headings, paragraphs, tables, and metadata, making them suitable for downstream NLP and RAG applications."
+  },
+  {
+    "question": "Why is chunking important in RAG pipelines?",
+    "expected_answer": "Chunking is important in RAG pipelines because it breaks documents into smaller, semantically coherent segments that can be effectively embedded and retrieved. Proper chunking ensures that retrieved passages contain focused, relevant information without exceeding context window limits, improving both retrieval precision and generation quality."
+  },
+  {
+    "question": "What advantages does RAG have over fine-tuning for domain adaptation?",
+    "expected_answer": "RAG offers several advantages over fine-tuning: 1) It can incorporate new knowledge without retraining the model, 2) Knowledge can be easily updated by modifying the retrieval corpus, 3) It's more cost-effective as it doesn't require expensive training runs, 4) It provides transparency through citations to source documents."
+  },
+  {
+    "question": "How does the retrieval component in RAG find relevant documents?",
+    "expected_answer": "The retrieval component in RAG typically uses dense vector search to find relevant documents. Queries and documents are encoded into high-dimensional embeddings using transformer models. Similarity is computed using metrics like cosine similarity or dot product, and the top-k most similar documents are retrieved to provide context for generation."
+  },
+  {
+    "question": "What role does the embedding model play in a RAG system?",
+    "expected_answer": "The embedding model converts text (both documents and queries) into dense vector representations that capture semantic meaning. These embeddings enable similarity search to find relevant documents even without exact keyword matches. Popular embedding models include sentence transformers and models like all-MiniLM-L6-v2."
+  },
+  {
+    "question": "How does Docling extract text from scanned PDF documents?",
+    "expected_answer": "Docling extracts text from scanned PDFs using OCR (Optical Character Recognition). It first identifies regions in the document that contain text, then applies OCR engines like EasyOCR or Tesseract to recognize and extract the text characters. The extracted text is then integrated with layout analysis to preserve document structure."
+  },
+  {
+    "question": "What is contextual chunking and why is it useful?",
+    "expected_answer": "Contextual chunking is a technique that adds surrounding context or document-level summaries to each chunk before embedding. This helps preserve semantic meaning that might be lost when text is split into smaller pieces, improving retrieval accuracy by ensuring chunks contain enough context to be matched with relevant queries."
+  },
+  {
+    "question": "What benchmarks were used to evaluate RAG in the original paper?",
+    "expected_answer": "The original RAG paper evaluated the model on several knowledge-intensive benchmarks including Natural Questions, TriviaQA, WebQuestions, and CuratedTrec for open-domain QA, as well as the FEVER dataset for fact verification and Jeopardy question generation tasks."
+  },
+  {
+    "question": "How does hybrid search improve RAG retrieval?",
+    "expected_answer": "Hybrid search combines dense vector search with sparse keyword-based search (like BM25) to improve retrieval. Dense search captures semantic similarity while sparse search excels at exact term matching. Combining both approaches provides more robust retrieval, handling both semantic queries and specific keyword lookups effectively."
+  }
+]
+
+
+
+
+
+

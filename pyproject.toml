@@ -1,0 +1,91 @@
+[project]
+name = "dspy-supabase-rag"
+version = "0.1.0"
+description = "Production-ready RAG pipeline with Docling, Supabase pgvector, DSPy, and Groq"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "Your Name", email = "you@example.com"}
+]
+keywords = ["rag", "dspy", "supabase", "llm", "docling", "pdf"]
+
+dependencies = [
+    # Core
+    "dspy-ai>=3.0.4",
+    "python-dotenv>=1.0.0",
+    # Document Processing
+    "docling>=2.0.0",
+    "docling-core>=2.0.0",
+    # Embeddings
+    "openai>=1.0.0",
+    "sentence-transformers>=2.2.0",
+    "numpy>=1.24.0",
+    # Vector Store
+    "supabase>=2.0.0",
+    # Hybrid Search
+    "rank-bm25>=0.2.2",
+    # LLM
+    "groq>=0.4.0",
+    # Evaluation
+    "ragas>=0.1.0",
+    "datasets>=2.14.0",
+    "langchain-openai>=0.0.5",
+    # MLflow Tracking
+    "mlflow>=2.10.0",
+    # Utils
+    "tqdm>=4.65.0",
+    "cohere>=5.20.0",
+]
+
+[project.optional-dependencies]
+# OCR engines (install one if processing scanned PDFs)
+ocr = [
+    "easyocr>=1.7.0",
+]
+ocr-tesseract = [
+    "pytesseract>=0.3.10",
+]
+
+# Alternative LLM providers
+gemini = [
+    "google-generativeai>=0.5.0",
+]
+
+# Development
+dev = [
+    "pytest>=7.0.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+]
+
+[project.scripts]
+rag = "rag_pipeline:main"
+rag-eval = "evaluation:main"
+rag-ingest = "rag_pipeline:main"
+rag-mlflow = "mlflow_tracking:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+ignore = ["E501"]  # Line too long (handled by formatter)
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+
+
+
+
+
