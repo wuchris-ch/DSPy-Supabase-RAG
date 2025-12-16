@@ -114,10 +114,14 @@ RRF_score(d) = Σ 1/(k + rank(d))  where k=60
 
 | Metric | What It Measures | Computation |
 |--------|------------------|-------------|
+| **Answer Relevancy** | Question addressing | Reverse question similarity |
+| **Faithfulness** | Grounding in context | Claim verification |
 | **Context Precision** | Retrieved chunk relevance | LLM judges each chunk |
 | **Context Recall** | Coverage of ground truth | Claims comparison |
-| **Faithfulness** | Grounding in context | Claim verification |
-| **Answer Relevancy** | Question addressing | Reverse question similarity |
+
+**Answer Relevancy is generally the most important metric** for RAG systems—it measures whether users actually get useful answers to their questions. A system with poor answer relevancy is effectively useless regardless of other scores.
+
+For high-stakes domains (medical, legal, financial), **Faithfulness** becomes equally critical since hallucinated information can cause real harm.
 
 ### Score Interpretation
 
