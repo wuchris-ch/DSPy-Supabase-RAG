@@ -17,6 +17,8 @@ Documents → Semantic Chunks → Vector Embeddings → Hybrid Retrieval → Rer
 | **Context Recall** | 64.6% | Coverage of relevant information |
 | **Faithfulness** | 73.0% | Answers grounded in context |
 
+*Answer Relevancy is typically the most important metric—it measures whether users get useful answers.*
+
 *Evaluated on 20 samples using [RAGAS](https://docs.ragas.io/) with GPT-4o-mini as judge*
 
 ---
