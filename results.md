@@ -1,17 +1,17 @@
 # RAG Pipeline Evaluation Report
 
-Generated: 2025-12-15T17:06:31.521692
+Generated: 2025-12-17T12:44:14.888762
 
 ## Summary
 
 | Metric | Score |
 |--------|-------|
-| **Overall** | 69.6% |
-| Context Precision | 55.7% |
-| Context Recall | 50.4% |
+| **Overall** | 82.9% |
+| Context Precision | 76.9% |
+| Context Recall | 70.4% |
 | Context Relevance | 0.0% |
-| Faithfulness | 81.9% |
-| Answer Relevancy | 90.4% |
+| Faithfulness | 91.7% |
+| Answer Relevancy | 92.5% |
 | Answer Correctness | 0.0% |
 
 ## Configuration

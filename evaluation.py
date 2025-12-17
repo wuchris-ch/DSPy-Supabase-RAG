@@ -135,59 +135,63 @@ class EvalResult:
 class RAGASEvaluator:
     """
     Evaluate RAG pipelines using RAGAS metrics.
-    
+
     RAGAS (Retrieval Augmented Generation Assessment) is the industry standard
     for RAG evaluation. Paper: https://arxiv.org/abs/2309.15217
-    
+
     Metrics:
     ════════
-    
+
     1. FAITHFULNESS (Generation)
        - Measures if claims in answer are supported by context
        - Extracts claims from answer, verifies each against context
        - Score = (supported claims) / (total claims)
-       
+
     2. ANSWER RELEVANCY (Generation)
        - Measures if answer addresses the question
        - Generates questions that the answer would be appropriate for
        - Score = similarity between generated questions and original
-       
+
     3. CONTEXT PRECISION (Retrieval)
        - Measures if retrieved contexts are relevant to question
        - Ranks contexts by relevance, penalizes irrelevant ones at top
        - Uses LLM to judge relevance of each context
-       
+
     4. CONTEXT RECALL (Retrieval)
        - Measures if all ground truth info was retrieved
        - Extracts claims from ground truth, checks if contexts cover them
        - Requires ground truth answer
-       
-    Note: Requires OpenAI API key for LLM-based evaluation.
+
+    Note: Uses a DIFFERENT model than the generator to avoid self-evaluation bias.
+    Default: gpt-5-mini with high reasoning for accurate evaluation.
     """
-    
+
     def __init__(
         self,
         model: str = "gpt-4o-mini",
         api_key: Optional[str] = None,
+        reasoning_effort: Optional[str] = None,  # Only for GPT-5 models
     ):
         """
         Initialize RAGAS evaluator.
-        
+
         Args:
-            model: OpenAI model for evaluation
+            model: OpenAI model for evaluation (default: gpt-5-mini)
             api_key: OpenAI API key (or use OPENAI_API_KEY env var)
+            reasoning_effort: Reasoning level for GPT-5 models (minimal/low/medium/high)
         """
         load_dotenv()
-        
+
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         self.model = model
-        
+        self.reasoning_effort = reasoning_effort
+
         if not self.api_key:
             logger.warning(
                 "OPENAI_API_KEY not found! RAGAS evaluation requires OpenAI.\n"
                 "Set OPENAI_API_KEY in your .env file."
             )
-        
+
         self._initialized = False
     
     def _init_ragas(self):
@@ -210,8 +214,17 @@ class RAGASEvaluator:
             self._evaluate = evaluate
             self._Dataset = Dataset
             
-            # Initialize LLM
-            llm = ChatOpenAI(model=self.model, api_key=self.api_key)
+            # Initialize LLM with reasoning effort for GPT-5 models
+            model_kwargs = {}
+            if self.model.startswith("gpt-5") and self.reasoning_effort:
+                model_kwargs["reasoning_effort"] = self.reasoning_effort
+                logger.info(f"Using {self.model} with reasoning_effort={self.reasoning_effort}")
+
+            llm = ChatOpenAI(
+                model=self.model,
+                api_key=self.api_key,
+                model_kwargs=model_kwargs,
+            )
             evaluator_llm = LangchainLLMWrapper(llm)
             
             # Configure metrics with LLM
@@ -729,7 +742,14 @@ class PipelineEvaluator:
         result = evaluator.full_eval(test_set)  # Automatically logged to MLflow
     """
 
-    def __init__(self, rag_system=None, enable_mlflow: bool = False, mlflow_config=None):
+    def __init__(
+        self,
+        rag_system=None,
+        enable_mlflow: bool = False,
+        mlflow_config=None,
+        evaluator_model: str = "gpt-4o-mini",
+        reasoning_effort: Optional[str] = None,
+    ):
         """
         Initialize pipeline evaluator.
 
@@ -737,8 +757,12 @@ class PipelineEvaluator:
             rag_system: Optional RAG system to evaluate
             enable_mlflow: Enable MLflow tracking for evaluations
             mlflow_config: Optional MLflowConfig for custom settings
+            evaluator_model: Model for RAGAS evaluation (default: gpt-4o-mini)
+            reasoning_effort: Reasoning level for GPT-5 models (optional)
         """
         self.rag_system = rag_system
+        self.evaluator_model = evaluator_model
+        self.reasoning_effort = reasoning_effort
         self._dspy_eval = DSPyEvaluator()
         self._llm_judge = LLMJudgeEvaluator()
         self._ragas_eval = None
@@ -756,7 +780,10 @@ class PipelineEvaluator:
         """Get RAGAS evaluator if OpenAI key available."""
         if self._ragas_eval is None:
             try:
-                self._ragas_eval = RAGASEvaluator()
+                self._ragas_eval = RAGASEvaluator(
+                    model=self.evaluator_model,
+                    reasoning_effort=self.reasoning_effort,
+                )
                 if self._ragas_eval.api_key:
                     return self._ragas_eval
             except:
@@ -764,16 +791,16 @@ class PipelineEvaluator:
         return self._ragas_eval if self._ragas_eval and self._ragas_eval.api_key else None
     
     def run_rag(
-        self, 
+        self,
         questions: list[str],
-        delay_seconds: float = 3.0,
+        delay_seconds: float = 0,
     ) -> list[EvalSample]:
         """
         Run RAG system on questions and collect samples for evaluation.
-        
+
         Args:
             questions: List of questions to ask
-            delay_seconds: Delay between queries to avoid rate limiting (default 3s)
+            delay_seconds: Delay between queries (default 0, not needed for DeepSeek)
             
         Returns:
             List of EvalSample with answers and contexts
@@ -805,7 +832,7 @@ class PipelineEvaluator:
         self,
         questions: list[str],
         verbose: bool = True,
-        delay_seconds: float = 3.0,
+        delay_seconds: float = 0,
         run_name: Optional[str] = None,
     ) -> EvalResult:
         """
@@ -851,7 +878,7 @@ class PipelineEvaluator:
         self,
         test_set: list[dict],
         verbose: bool = True,
-        delay_seconds: float = 3.0,
+        delay_seconds: float = 0,
         run_name: Optional[str] = None,
     ) -> EvalResult:
         """
@@ -1024,11 +1051,23 @@ def main():
     quick_parser.add_argument("--questions", "-q", nargs="+",
                               help="Questions to evaluate")
     quick_parser.add_argument("--file", "-f", help="JSON file with questions")
-    quick_parser.add_argument("--delay", "-d", type=float, default=3.0,
-                              help="Delay between queries in seconds (default: 3.0)")
+    quick_parser.add_argument("--delay", "-d", type=float, default=0,
+                              help="Delay between queries in seconds (default: 0)")
+    quick_parser.add_argument("--provider", "-p", default="deepseek",
+                              choices=["deepseek", "groq", "gemini"],
+                              help="LLM provider (default: deepseek)")
+    quick_parser.add_argument("--model", "-m",
+                              help="LLM model name (e.g., deepseek-chat, deepseek-reasoner)")
     quick_parser.add_argument("--mlflow", action="store_true",
                               help="Enable MLflow tracking")
     quick_parser.add_argument("--run-name", help="MLflow run name")
+    quick_parser.add_argument("--faithful", choices=["fast", "full"],
+                              help="Enable claim verification (fast=batch, full=individual)")
+    quick_parser.add_argument("--evaluator-model", default="gpt-4o-mini",
+                              help="Model for RAGAS evaluation (default: gpt-4o-mini)")
+    quick_parser.add_argument("--reasoning-effort", default=None,
+                              choices=["minimal", "low", "medium", "high"],
+                              help="Reasoning effort for GPT-5 evaluator (optional)")
 
     # Full eval
     full_parser = subparsers.add_parser("full", help="Full evaluation with ground truth")
@@ -1036,11 +1075,23 @@ def main():
                              help="JSON file with test set")
     full_parser.add_argument("--output", "-o", default="eval_results.json",
                              help="Output file for results")
-    full_parser.add_argument("--delay", "-d", type=float, default=3.0,
-                             help="Delay between queries in seconds (default: 3.0)")
+    full_parser.add_argument("--delay", "-d", type=float, default=0,
+                             help="Delay between queries in seconds (default: 0)")
+    full_parser.add_argument("--provider", "-p", default="deepseek",
+                             choices=["deepseek", "groq", "gemini"],
+                             help="LLM provider (default: deepseek)")
+    full_parser.add_argument("--model", "-m",
+                             help="LLM model name (e.g., deepseek-chat, deepseek-reasoner)")
     full_parser.add_argument("--mlflow", action="store_true",
                              help="Enable MLflow tracking")
     full_parser.add_argument("--run-name", help="MLflow run name")
+    full_parser.add_argument("--faithful", choices=["fast", "full"],
+                             help="Enable claim verification (fast=batch, full=individual)")
+    full_parser.add_argument("--evaluator-model", default="gpt-4o-mini",
+                             help="Model for RAGAS evaluation (default: gpt-4o-mini)")
+    full_parser.add_argument("--reasoning-effort", default=None,
+                             choices=["minimal", "low", "medium", "high"],
+                             help="Reasoning effort for GPT-5 evaluator (optional)")
     
     # Demo
     subparsers.add_parser("demo", help="Run evaluation demo")
@@ -1059,8 +1110,27 @@ def main():
             with open(args.file) as f:
                 questions = json.load(f)
 
-        rag = RAGSystem(save_questions_to_faq=False)
-        evaluator = PipelineEvaluator(rag, enable_mlflow=args.mlflow)
+        faithful_mode = getattr(args, 'faithful', None)
+        provider = getattr(args, 'provider', 'deepseek')
+        model = getattr(args, 'model', None)
+        rag = RAGSystem(
+            save_questions_to_faq=False,
+            faithful_mode=faithful_mode,
+            llm_provider=provider,
+            llm_model=model,
+        )
+        print(f"Using provider: {provider}, model: {model or 'default'}")
+        if faithful_mode:
+            print(f"Using faithful mode: {faithful_mode}")
+        evaluator_model = getattr(args, 'evaluator_model', 'gpt-4o-mini')
+        reasoning_effort = getattr(args, 'reasoning_effort', None)
+        print(f"Evaluator: {evaluator_model}")
+        evaluator = PipelineEvaluator(
+            rag,
+            enable_mlflow=args.mlflow,
+            evaluator_model=evaluator_model,
+            reasoning_effort=reasoning_effort,
+        )
         result = evaluator.quick_eval(
             questions,
             delay_seconds=args.delay,
@@ -1074,8 +1144,28 @@ def main():
         with open(args.file) as f:
             test_set = json.load(f)
 
-        rag = RAGSystem(save_questions_to_faq=False, k=5)
-        evaluator = PipelineEvaluator(rag, enable_mlflow=args.mlflow)
+        faithful_mode = getattr(args, 'faithful', None)
+        provider = getattr(args, 'provider', 'deepseek')
+        model = getattr(args, 'model', None)
+        rag = RAGSystem(
+            save_questions_to_faq=False,
+            k=5,
+            faithful_mode=faithful_mode,
+            llm_provider=provider,
+            llm_model=model,
+        )
+        print(f"Using provider: {provider}, model: {model or 'default'}")
+        if faithful_mode:
+            print(f"Using faithful mode: {faithful_mode}")
+        evaluator_model = getattr(args, 'evaluator_model', 'gpt-4o-mini')
+        reasoning_effort = getattr(args, 'reasoning_effort', None)
+        print(f"Evaluator: {evaluator_model}")
+        evaluator = PipelineEvaluator(
+            rag,
+            enable_mlflow=args.mlflow,
+            evaluator_model=evaluator_model,
+            reasoning_effort=reasoning_effort,
+        )
         result = evaluator.full_eval(
             test_set,
             delay_seconds=args.delay,

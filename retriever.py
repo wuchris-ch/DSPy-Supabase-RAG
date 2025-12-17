@@ -26,6 +26,13 @@ try:
 except ImportError:
     COHERE_AVAILABLE = False
 
+# Optional local cross-encoder reranker
+try:
+    from sentence_transformers import CrossEncoder
+    CROSS_ENCODER_AVAILABLE = True
+except ImportError:
+    CROSS_ENCODER_AVAILABLE = False
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -211,8 +218,8 @@ class HybridRetriever:
         table_name: str = "documents",
         bm25_weight: float = 0.4,
         vector_weight: float = 0.6,
-        use_reranker: bool = True,  # Cohere reranking enabled
-        rerank_model: str = "rerank-v3.5",
+        reranker: str = "llm",  # "llm", "cohere", "local", or "none"
+        rerank_model: str = "deepseek-chat",  # LLM, Cohere, or cross-encoder model
         over_retrieve_factor: int = 4,
     ):
         """
@@ -229,8 +236,15 @@ class HybridRetriever:
             table_name: Name of the documents table
             bm25_weight: Weight for BM25 scores in fusion (0-1)
             vector_weight: Weight for vector scores in fusion (0-1)
-            use_reranker: Enable Cohere reranking for improved precision
-            rerank_model: Cohere rerank model ("rerank-v3.5" or "rerank-english-v3.0")
+            reranker: Reranker type to use:
+                - "llm": Use LLM (DeepSeek) for reranking (cheap, no rate limits)
+                - "cohere": Cohere rerank API (rate limited on trial)
+                - "local": Local cross-encoder model (free, no limits)
+                - "none": No reranking, just RRF fusion
+            rerank_model: Model for reranking:
+                - LLM: "deepseek-chat" (recommended) or any OpenAI-compatible model
+                - Cohere: "rerank-v3.5" or "rerank-english-v3.0"
+                - Local: "cross-encoder/ms-marco-MiniLM-L-6-v2" (fast)
             over_retrieve_factor: How many more candidates to retrieve before reranking
         """
         load_dotenv()
@@ -262,22 +276,50 @@ class HybridRetriever:
         self._bm25_index = None
         self._documents_cache = None
 
-        # Initialize Cohere reranker if available and requested
-        self.use_reranker = use_reranker and COHERE_AVAILABLE
+        # Initialize reranker based on type
+        self.reranker_type = reranker
         self.rerank_model = rerank_model
-        self._reranker = None
+        self._cohere_client = None
+        self._cross_encoder = None
+        self.use_reranker = reranker != "none"
 
-        if use_reranker:
+        if reranker == "llm":
+            # Use DeepSeek (or other OpenAI-compatible) for reranking
+            deepseek_key = os.getenv("DEEPSEEK_API_KEY")
+            if deepseek_key:
+                self._llm_reranker_model = rerank_model if rerank_model else "deepseek-chat"
+                self._llm_reranker_api_key = deepseek_key
+                self._llm_reranker_base_url = "https://api.deepseek.com"
+                logger.info(f"LLM reranker enabled: {self._llm_reranker_model}")
+            else:
+                logger.warning("DEEPSEEK_API_KEY not found. Falling back to no reranking.")
+                self.use_reranker = False
+                self.reranker_type = "none"
+
+        elif reranker == "cohere":
             cohere_api_key = os.getenv("COHERE_API_KEY")
             if COHERE_AVAILABLE and cohere_api_key:
-                self._reranker = cohere.Client(api_key=cohere_api_key)
+                self._cohere_client = cohere.Client(api_key=cohere_api_key)
                 logger.info(f"Cohere reranker enabled: {rerank_model}")
-            elif not COHERE_AVAILABLE:
-                logger.warning("Cohere not installed. Install with: pip install cohere")
-                self.use_reranker = False
             else:
-                logger.warning("COHERE_API_KEY not found. Reranking disabled.")
+                if not COHERE_AVAILABLE:
+                    logger.warning("Cohere not installed. Install with: pip install cohere")
+                else:
+                    logger.warning("COHERE_API_KEY not found.")
+                logger.warning("Falling back to no reranking.")
                 self.use_reranker = False
+                self.reranker_type = "none"
+
+        elif reranker == "local":
+            if CROSS_ENCODER_AVAILABLE:
+                local_model = rerank_model if "cross-encoder" in rerank_model else "cross-encoder/ms-marco-MiniLM-L-6-v2"
+                logger.info(f"Loading local cross-encoder: {local_model}")
+                self._cross_encoder = CrossEncoder(local_model)
+                logger.info("Local cross-encoder reranker enabled")
+            else:
+                logger.warning("sentence-transformers not installed. Install with: pip install sentence-transformers")
+                self.use_reranker = False
+                self.reranker_type = "none"
 
         logger.info("HybridRetriever initialized")
     
@@ -394,7 +436,7 @@ class HybridRetriever:
         top_n: int,
     ) -> list["RetrievalResult"]:
         """
-        Rerank results using Cohere reranker.
+        Rerank results using configured reranker (Cohere or local cross-encoder).
 
         Args:
             query: Original search query
@@ -404,9 +446,100 @@ class HybridRetriever:
         Returns:
             Reranked list of RetrievalResult
         """
+        if not results:
+            return results[:top_n]
+
+        if self.reranker_type == "llm":
+            return self._rerank_llm(query, results, top_n)
+        elif self.reranker_type == "cohere":
+            return self._rerank_cohere(query, results, top_n)
+        elif self.reranker_type == "local":
+            return self._rerank_local(query, results, top_n)
+        else:
+            return results[:top_n]
+
+    def _rerank_llm(
+        self,
+        query: str,
+        results: list["RetrievalResult"],
+        top_n: int,
+    ) -> list["RetrievalResult"]:
+        """Rerank using LLM (DeepSeek) - cheap and effective."""
+        try:
+            from openai import OpenAI
+
+            client = OpenAI(
+                api_key=self._llm_reranker_api_key,
+                base_url=self._llm_reranker_base_url,
+            )
+
+            # Build the prompt with numbered documents
+            docs_text = "\n\n".join([
+                f"[Document {i+1}]\n{r.content[:500]}..."
+                if len(r.content) > 500 else f"[Document {i+1}]\n{r.content}"
+                for i, r in enumerate(results)
+            ])
+
+            prompt = f"""Given the query and documents below, rank the documents by relevance to the query.
+Return ONLY a comma-separated list of document numbers in order of relevance (most relevant first).
+Example response: 3,1,4,2,5
+
+Query: {query}
+
+Documents:
+{docs_text}
+
+Ranking (comma-separated document numbers, most relevant first):"""
+
+            response = client.chat.completions.create(
+                model=self._llm_reranker_model,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=100,
+                temperature=0,
+            )
+
+            # Parse the ranking
+            ranking_str = response.choices[0].message.content.strip()
+            # Extract numbers from the response
+            import re
+            numbers = re.findall(r'\d+', ranking_str)
+            ranking = [int(n) - 1 for n in numbers if 0 < int(n) <= len(results)]
+
+            # Build reranked list
+            reranked = []
+            seen = set()
+            for i, idx in enumerate(ranking[:top_n]):
+                if idx < len(results) and idx not in seen:
+                    result = results[idx]
+                    result.final_rank = i + 1
+                    result.rrf_score = 1.0 - (i * 0.1)  # Descending score
+                    reranked.append(result)
+                    seen.add(idx)
+
+            # Add any missing results at the end
+            for idx, result in enumerate(results):
+                if idx not in seen and len(reranked) < top_n:
+                    result.final_rank = len(reranked) + 1
+                    result.rrf_score = 0.1
+                    reranked.append(result)
+
+            logger.info(f"Reranked {len(results)} -> {len(reranked)} results (LLM)")
+            return reranked[:top_n]
+
+        except Exception as e:
+            logger.warning(f"LLM reranking failed: {e}. Using original order.")
+            return results[:top_n]
+
+    def _rerank_cohere(
+        self,
+        query: str,
+        results: list["RetrievalResult"],
+        top_n: int,
+    ) -> list["RetrievalResult"]:
+        """Rerank using Cohere API."""
         import time
 
-        if not self._reranker or not results:
+        if not self._cohere_client:
             return results[:top_n]
 
         try:
@@ -421,7 +554,7 @@ class HybridRetriever:
             documents = [r.content for r in results]
 
             # Call Cohere rerank API
-            rerank_response = self._reranker.rerank(
+            rerank_response = self._cohere_client.rerank(
                 query=query,
                 documents=documents,
                 top_n=min(top_n, len(documents)),
@@ -436,11 +569,46 @@ class HybridRetriever:
                 result.rrf_score = item.relevance_score  # Use rerank score
                 reranked.append(result)
 
-            logger.info(f"Reranked {len(results)} -> {len(reranked)} results")
+            logger.info(f"Reranked {len(results)} -> {len(reranked)} results (Cohere)")
             return reranked
 
         except Exception as e:
             logger.warning(f"Reranking failed: {e}. Using original order.")
+            return results[:top_n]
+
+    def _rerank_local(
+        self,
+        query: str,
+        results: list["RetrievalResult"],
+        top_n: int,
+    ) -> list["RetrievalResult"]:
+        """Rerank using local cross-encoder model."""
+        if not self._cross_encoder:
+            return results[:top_n]
+
+        try:
+            # Prepare query-document pairs for cross-encoder
+            pairs = [(query, r.content) for r in results]
+
+            # Get relevance scores from cross-encoder
+            scores = self._cross_encoder.predict(pairs)
+
+            # Sort by score descending
+            scored_results = list(zip(results, scores))
+            scored_results.sort(key=lambda x: x[1], reverse=True)
+
+            # Build reranked list
+            reranked = []
+            for i, (result, score) in enumerate(scored_results[:top_n]):
+                result.final_rank = i + 1
+                result.rrf_score = float(score)  # Use cross-encoder score
+                reranked.append(result)
+
+            logger.info(f"Reranked {len(results)} -> {len(reranked)} results (local)")
+            return reranked
+
+        except Exception as e:
+            logger.warning(f"Local reranking failed: {e}. Using original order.")
             return results[:top_n]
     
     def _reciprocal_rank_fusion(

@@ -20,3 +20,4 @@ __pycache__/
 # Project specific
 results_history/
 mlruns/
+CLAUDE.md

@@ -1,12 +1,12 @@
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║  DSPy RAG Pipeline with Groq (kimi-k2-instruct)                             ║
+║  DSPy RAG Pipeline with DeepSeek / Groq / Gemini                            ║
 ║                                                                              ║
 ║  Complete RAG system combining:                                              ║
 ║  - PDF processing with Docling                                               ║
 ║  - Contextual chunking                                                       ║
 ║  - Hybrid retrieval (BM25 + pgvector)                                       ║
-║  - Generation with Groq's kimi-k2-instruct                                  ║
+║  - Generation with DeepSeek (chat/reasoner), Groq, or Gemini                ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 
@@ -24,6 +24,13 @@ from dotenv import load_dotenv
 from pdf_processor import PDFProcessor, ContextualChunker, DocumentChunk
 from embeddings import EmbeddingPipeline, EmbeddingGenerator
 from retriever import HybridRetriever, SupabaseRetriever, RetrievalResult
+
+# Optional faithful RAG module
+try:
+    from faithful_rag import FaithfulRAGModule, FaithfulRAGModuleFast, FaithfulRAGResponse
+    FAITHFUL_RAG_AVAILABLE = True
+except ImportError:
+    FAITHFUL_RAG_AVAILABLE = False
 
 # Optional MLflow integration
 try:
@@ -97,32 +104,82 @@ def setup_gemini_lm(
 ) -> dspy.LM:
     """
     Alternative: Configure DSPy with Google Gemini.
-    
+
     Args:
         model: Gemini model name
         temperature: Generation temperature
-        
+
     Returns:
         Configured DSPy language model
     """
     load_dotenv()
-    
+
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise ValueError(
             "GEMINI_API_KEY not found!\n"
             "Get your API key at: https://aistudio.google.com/apikey"
         )
-    
+
     lm = dspy.LM(
         model=f"gemini/{model}",
         api_key=api_key,
         temperature=temperature,
     )
-    
+
     dspy.configure(lm=lm)
-    
+
     logger.info(f"Configured DSPy with Gemini: {model}")
+    return lm
+
+
+def setup_deepseek_lm(
+    model: str = "deepseek-chat",
+    temperature: float = 0.7,
+    max_tokens: int = 4096,
+) -> dspy.LM:
+    """
+    Configure DSPy with DeepSeek API.
+
+    DeepSeek provides:
+    - Pay-as-you-go pricing with no rate limits
+    - OpenAI-compatible API
+    - Two model variants
+
+    Models available:
+    - deepseek-chat: Fast, general-purpose model
+    - deepseek-reasoner: Advanced reasoning model (R1)
+
+    Args:
+        model: Model name ("deepseek-chat" or "deepseek-reasoner")
+        temperature: Generation temperature (0-2)
+        max_tokens: Maximum tokens in response
+
+    Returns:
+        Configured DSPy language model
+    """
+    load_dotenv()
+
+    api_key = os.getenv("DEEPSEEK_API_KEY")
+    if not api_key:
+        raise ValueError(
+            "DEEPSEEK_API_KEY not found!\n"
+            "Get your API key at: https://platform.deepseek.com/api_keys\n"
+            "Then set it in your .env file."
+        )
+
+    # DeepSeek uses OpenAI-compatible API
+    lm = dspy.LM(
+        model=f"openai/{model}",
+        api_key=api_key,
+        api_base="https://api.deepseek.com",
+        temperature=temperature,
+        max_tokens=max_tokens,
+    )
+
+    dspy.configure(lm=lm)
+
+    logger.info(f"Configured DSPy with DeepSeek: {model}")
     return lm
 
 
@@ -450,7 +507,7 @@ class RAGSystem:
     
     def __init__(
         self,
-        llm_provider: str = "groq",  # "groq" or "gemini"
+        llm_provider: str = "deepseek",  # "deepseek", "groq", or "gemini"
         llm_model: Optional[str] = None,
         hybrid_retrieval: bool = True,
         enable_ocr: bool = True,
@@ -462,12 +519,13 @@ class RAGSystem:
         mlflow_config: Optional["MLflowConfig"] = None,
         embedding_model: str = "text-embedding-3-large",
         embedding_dimensions: Optional[int] = 1536,  # Truncate for Supabase HNSW limit
+        faithful_mode: Optional[str] = None,  # None, "fast", or "full"
     ):
         """
         Initialize the complete RAG system.
 
         Args:
-            llm_provider: LLM provider ("groq" or "gemini")
+            llm_provider: LLM provider ("deepseek", "groq", or "gemini")
             llm_model: Specific model name (uses provider default if None)
             hybrid_retrieval: Use hybrid (BM25 + vector) or vector-only
             enable_ocr: Enable OCR for PDF processing
@@ -483,6 +541,10 @@ class RAGSystem:
                 - "all-MiniLM-L6-v2" (local, free, lower quality)
             embedding_dimensions: Optional dimension override for OpenAI models.
                                  Use 512 or 1024 for cost/storage savings.
+            faithful_mode: Enable claim verification for higher faithfulness.
+                - None: Standard generation (default)
+                - "fast": Batch claim verification (3 LLM calls)
+                - "full": Individual claim verification (N+3 LLM calls, most accurate)
         """
         load_dotenv()
 
@@ -491,7 +553,10 @@ class RAGSystem:
         self.embedding_dimensions = embedding_dimensions
 
         # Setup LLM
-        if llm_provider == "groq":
+        if llm_provider == "deepseek":
+            model = llm_model or "deepseek-chat"
+            self.lm = setup_deepseek_lm(model=model)
+        elif llm_provider == "groq":
             model = llm_model or "moonshotai/kimi-k2-instruct"
             self.lm = setup_groq_lm(model=model)
         else:
@@ -513,11 +578,18 @@ class RAGSystem:
             )
 
         # Setup RAG module
-        self.rag = RAGModule(
-            retriever=self.retriever,
-            use_reasoning=True,
-            k=k,
-        )
+        self.faithful_mode = faithful_mode
+        if faithful_mode and FAITHFUL_RAG_AVAILABLE:
+            if faithful_mode == "fast":
+                self.rag = FaithfulRAGModuleFast(retriever=self.retriever, k=k)
+            else:  # "full"
+                self.rag = FaithfulRAGModule(retriever=self.retriever, k=k, mode="verify")
+            logger.info(f"Using FaithfulRAG module (mode={faithful_mode})")
+        elif faithful_mode and not FAITHFUL_RAG_AVAILABLE:
+            logger.warning("faithful_mode requested but faithful_rag.py not found, using standard RAG")
+            self.rag = RAGModule(retriever=self.retriever, use_reasoning=True, k=k)
+        else:
+            self.rag = RAGModule(retriever=self.retriever, use_reasoning=True, k=k)
 
         # Setup ingestion pipeline
         self.ingestion = DocumentIngestionPipeline(
@@ -645,21 +717,27 @@ class RAGSystem:
                 continue
             
             response = self.query(question)
-            
+
             print(f"\n💬 Answer: {response.answer}")
-            
+
             if response.reasoning:
                 print(f"\n🔍 Reasoning: {response.reasoning}")
-            
+
             if response.sources:
                 print(f"\n📚 Sources: {response.sources}")
-            
+
+            # Show faithfulness info if using faithful mode
+            if hasattr(response, 'faithfulness_score'):
+                print(f"\n✅ Faithfulness: {response.faithfulness_score:.1%}")
+                if response.claims_unsupported:
+                    print(f"   ⚠️  {len(response.claims_unsupported)} unsupported claims removed")
+
             print(f"\n📄 Retrieved {len(response.retrieved_chunks)} chunks:")
             for chunk in response.retrieved_chunks[:3]:
                 print(f"   - {chunk.source}")
-                if chunk.section:
+                if hasattr(chunk, 'section') and chunk.section:
                     print(f"     Section: {chunk.section}")
-            
+
             print()
 
 
@@ -692,6 +770,8 @@ def main():
                               help="Do not store this Q&A as a FAQ chunk")
     query_parser.add_argument("--mlflow", action="store_true",
                               help="Enable MLflow tracking")
+    query_parser.add_argument("--faithful", choices=["fast", "full"],
+                              help="Enable claim verification (fast=batch, full=individual)")
 
     # Interactive command
     interactive_parser = subparsers.add_parser("interactive", help="Start interactive mode")
@@ -699,6 +779,8 @@ def main():
                                     help="Do not store Q&A from this session")
     interactive_parser.add_argument("--mlflow", action="store_true",
                                     help="Enable MLflow tracking")
+    interactive_parser.add_argument("--faithful", choices=["fast", "full"],
+                                    help="Enable claim verification (fast=batch, full=individual)")
     
     # Parse args
     args = parser.parse_args()
@@ -718,6 +800,7 @@ def main():
             k=args.count,
             save_questions_to_faq=not args.no_save_faq,
             enable_mlflow=args.mlflow,
+            faithful_mode=getattr(args, 'faithful', None),
         )
 
         response = rag.query(args.question)
@@ -731,10 +814,19 @@ def main():
         if response.sources:
             print(f"\n📚 Sources: {response.sources}")
 
+        # Show faithfulness info if using faithful mode
+        if hasattr(response, 'faithfulness_score'):
+            print(f"\n✅ Faithfulness: {response.faithfulness_score:.1%}")
+            if response.claims_unsupported:
+                print(f"   Removed {len(response.claims_unsupported)} unsupported claims:")
+                for v in response.claims_unsupported[:3]:
+                    print(f"   - {v.claim[:80]}...")
+
     elif args.command == "interactive":
         rag = RAGSystem(
             save_questions_to_faq=not args.no_save_faq,
             enable_mlflow=args.mlflow,
+            faithful_mode=getattr(args, 'faithful', None),
         )
         rag.interactive()
     

@@ -1,0 +1,183 @@
+{
+  "scores": {
+    "overall": 0.7752597222736003,
+    "retrieval": {
+      "context_precision": 0.7353472221961603,
+      "context_recall": 0.6874999999999999,
+      "context_relevance": 0.0
+    },
+    "generation": {
+      "faithfulness": 0.8922790404040404,
+      "answer_relevancy": 0.7859126264942005,
+      "answer_correctness": 0.0
+    }
+  },
+  "num_samples": 20,
+  "timestamp": "2025-12-17T13:08:12.825318",
+  "config": {
+    "evaluator": "ragas",
+    "model": "gpt-4o-mini"
+  },
+  "samples_detail": [
+    {
+      "question": "What is Docling and what is its primary purpose?",
+      "answer": "Docling is an MIT-licensed, open-source Python package designed for converting PDF documents into machine-readable formats such as JSON or Markdown (Source 1). Its primary purpose is to provide effici...",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.9035823838216044,
+      "context_precision": 0.4777777777618519,
+      "context_recall": 0.0
+    },
+    {
+      "question": "What document formats does Docling support?",
+      "answer": "Based on the context, Docling supports the following document formats:\n- **Input format**: PDF documents, as it is designed for PDF conversion (Source 1).\n- **Output formats**: JSON or Markdown, as th...",
+      "faithfulness": 0.8,
+      "answer_relevancy": 0.9999999999999994,
+      "context_precision": 0.0,
+      "context_recall": 0.5
+    },
+    {
+      "question": "How does Docling handle tables in documents?",
+      "answer": "Docling handles tables in documents by using a specialized AI model called TableFormer for table structure recognition, integrated into its processing pipeline [Source 1]. Specifically:\n\n- **Table Det...",
+      "faithfulness": 0.9545454545454546,
+      "answer_relevancy": 0.9999999999999998,
+      "context_precision": 0.999999999975,
+      "context_recall": 1.0
+    },
+    {
+      "question": "What OCR capabilities does Docling provide?",
+      "answer": "Docling provides the following OCR capabilities, based solely on the context:\n- **Optional support**: OCR is an optional feature that can be enabled or disabled as needed (Source 2, Source 3).\n- **Pow...",
+      "faithfulness": 0.9090909090909091,
+      "answer_relevancy": 0.9855707689847084,
+      "context_precision": 0.0,
+      "context_recall": 0.5
+    },
+    {
+      "question": "What is RAG and why was it developed?",
+      "answer": "RAG (Retrieval-Augmented Generation) is a model that combines a pre-trained parametric seq2seq transformer with a non-parametric memory (a dense vector index of Wikipedia accessed via a neural retriev...",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.9038179642924267,
+      "context_precision": 0.8041666666465626,
+      "context_recall": 1.0
+    },
+    {
+      "question": "What are the two main components of the RAG architecture?",
+      "answer": "Based on the context, the two main components of the RAG architecture are the retriever and the generator. The retriever retrieves text documents given a query, and the generator uses these documents ...",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.9774327964109168,
+      "context_precision": 0.8874999999778125,
+      "context_recall": 1.0
+    },
+    {
+      "question": "How does RAG reduce hallucinations in language models?",
+      "answer": "RAG reduces hallucinations in language models by grounding its generations in real factual knowledge from external sources, such as Wikipedia. This is achieved through its hybrid architecture that com...",
+      "faithfulness": 1.0,
+      "answer_relevancy": 1.0,
+      "context_precision": 0.99999999998,
+      "context_recall": 1.0
+    },
+    {
+      "question": "What is Dense Passage Retrieval (DPR) in the context of RAG?",
+      "answer": "In the context of RAG (Retrieval-Augmented Generation), Dense Passage Retrieval (DPR) is the retrieval component that uses a bi-encoder architecture to encode queries and documents as dense vectors fo...",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.9999999999999994,
+      "context_precision": 0.699999999965,
+      "context_recall": 1.0
+    },
+    {
+      "question": "What types of knowledge-intensive tasks does RAG excel at?",
+      "answer": "Based on the supported claims, RAG excels at open-domain question answering (QA), setting new state-of-the-art results on four benchmarks (Natural Questions, TriviaQA, WebQuestions, and CuratedTrec) a...",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.0,
+      "context_precision": 0.99999999998,
+      "context_recall": 1.0
+    },
+    {
+      "question": "What is the difference between RAG-Sequence and RAG-Token models?",
+      "answer": "The primary differences between RAG-Sequence and RAG-Token models are:\n\n1. **Usage of retrieved documents**: RAG-Sequence uses the same retrieved document for the entire output sequence, treating it a...",
+      "faithfulness": 0.9375,
+      "answer_relevancy": 0.9827361225223803,
+      "context_precision": 0.99999999998,
+      "context_recall": 1.0
+    },
+    {
+      "question": "How does Docling handle document layout analysis?",
+      "answer": "Docling handles document layout analysis by employing a dedicated AI model that is an object detector based on the RT-DETR architecture, trained on the DocLayNet dataset and other proprietary data (So...",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.9999999999999997,
+      "context_precision": 0.99999999998,
+      "context_recall": 0.5
+    },
+    {
+      "question": "What output formats can Docling generate?",
+      "answer": "Based on the context, Docling can generate output in JSON or Markdown format. This is explicitly stated in the Introduction (Source 1) and the Getting Started section (Source 4).",
+      "faithfulness": 0.75,
+      "answer_relevancy": 0.9848027507130155,
+      "context_precision": 0.8874999999778125,
+      "context_recall": 0.0
+    },
+    {
+      "question": "Why is chunking important in RAG pipelines?",
+      "answer": "Based solely on the provided context from the RAG paper, there is no information on why chunking is important in RAG pipelines. The context focuses on the model's architecture, such as the retriever a...",
+      "faithfulness": 0.9,
+      "answer_relevancy": 0.0,
+      "context_precision": 0.699999999965,
+      "context_recall": 0.5
+    },
+    {
+      "question": "What advantages does RAG have over fine-tuning for domain adaptation?",
+      "answer": "Based on the context, RAG has a key advantage over fine-tuning for domain adaptation: it allows knowledge to be updated without retraining the parametric components of the model. Specifically, RAG sup...",
+      "faithfulness": 0.75,
+      "answer_relevancy": 0.9904811144830098,
+      "context_precision": 0.99999999998,
+      "context_recall": 0.5
+    },
+    {
+      "question": "How does the retrieval component in RAG find relevant documents?",
+      "answer": "The retrieval component in RAG finds relevant documents by using Dense Passage Retrieval (DPR) with a bi-encoder architecture. Specifically, it encodes the input query and documents into dense vectors...",
+      "faithfulness": 0.8333333333333334,
+      "answer_relevancy": 0.9999999999999997,
+      "context_precision": 0.9999999999666667,
+      "context_recall": 0.75
+    },
+    {
+      "question": "What role does the embedding model play in a RAG system?",
+      "answer": "Based on the context, the embedding model's role is to serve as the core component of the retriever in a RAG system. It encodes both the input query and the documents in the external knowledge source ...",
+      "faithfulness": 0.4444444444444444,
+      "answer_relevancy": 0.994865032377493,
+      "context_precision": 0.0,
+      "context_recall": 0.6666666666666666
+    },
+    {
+      "question": "How does Docling extract text from scanned PDF documents?",
+      "answer": "Docling extracts text from scanned PDF documents using an optional OCR (Optical Character Recognition) capability. Since scanned PDFs are essentially images without native, selectable text layers, Doc...",
+      "faithfulness": 0.9,
+      "answer_relevancy": 0.9999999999999996,
+      "context_precision": 0.7499999999625,
+      "context_recall": 0.6666666666666666
+    },
+    {
+      "question": "What is contextual chunking and why is it useful?",
+      "answer": "Based solely on the provided context, \"contextual chunking\" is not defined or discussed. However, the context does mention that in the RAG experiments, Wikipedia articles are split into disjoint 100-w...",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.0,
+      "context_precision": 0.9999999999,
+      "context_recall": 0.5
+    },
+    {
+      "question": "What benchmarks were used to evaluate RAG in the original paper?",
+      "answer": "Based solely on the provided context, the benchmarks used to evaluate RAG in the original paper are:\n- Natural Questions (NQ) [Source 1, Source 2, Source 4]\n- TriviaQA (TQA) [Source 1, Source 2, Sourc...",
+      "faithfulness": 0.6666666666666666,
+      "answer_relevancy": 0.9949635962784567,
+      "context_precision": 0.999999999975,
+      "context_recall": 1.0
+    },
+    {
+      "question": "How does hybrid search improve RAG retrieval?",
+      "answer": "Based on the provided context, there is no explicit information on how hybrid search improves RAG retrieval. The context discusses RAG models as hybrid systems that combine parametric memory (e.g., a ...",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.0,
+      "context_precision": 0.49999999995,
+      "context_recall": 0.6666666666666666
+    }
+  ]
+}
