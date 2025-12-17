@@ -13,11 +13,13 @@ Documents → Semantic Chunks → Vector Embeddings → Hybrid Retrieval → Rer
 | Metric | Score | Description |
 |--------|-------|-------------|
 | **Answer Relevancy** | **92.5%** | Generated answers address the question |
-| **Faithfulness** | **91.7%** | Answers grounded in context |
+| **Faithfulness** | **91.7%** | Answers grounded in context (no hallucination) |
 | **Context Precision** | 76.9% | Retrieved chunks are relevant |
 | **Context Recall** | 70.4% | Coverage of relevant information |
 
 *Both Answer Relevancy and Faithfulness exceed 90%, the key metrics for production RAG systems.*
+
+*Faithfulness measures how much the LLM "hallucinates", i.e. makes up information not present in the retrieved context. Higher = less hallucination.*
 
 *Evaluated on 20 samples using [RAGAS](https://docs.ragas.io/) with GPT-4o-mini as judge, DeepSeek-chat as generator*
 
