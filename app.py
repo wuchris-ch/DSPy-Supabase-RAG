@@ -654,7 +654,7 @@ st.markdown("""
             <div class="stat-label">Papers</div>
         </div>
     </div>
-    <p class="timing-note">First query takes 10-20s for verification • Repeated queries are instant</p>
+    <p class="timing-note">First query takes around a minute for verification • Repeated queries are instant</p>
 </div>
 """, unsafe_allow_html=True)
 
