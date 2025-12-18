@@ -1,6 +1,6 @@
 # Production Medical RAG Pipeline
 
-A reference implementation achieving **98.3% faithfulness** on medical documents. This README explains the concepts, trade-offs, and architectural decisions for building production RAG systems.
+**[Live Demo](https://dspy-supabase-rag.streamlit.app/)** | A reference implementation achieving **98.3% faithfulness** on medical documents. This README explains the concepts, trade-offs, and architectural decisions for building production RAG systems.
 
 ```
 Documents → Semantic Chunks → Vector Embeddings → Hybrid Retrieval → Reranking → LLM Generation
@@ -492,6 +492,7 @@ uv run rag_pipeline.py interactive
 ## File Structure
 
 ```
+├── app.py                # Streamlit UI (live demo)
 ├── rag_pipeline.py       # Main RAGSystem orchestrator
 ├── confident_rag.py      # Confidence-gated RAG with abstention
 ├── faithful_rag.py       # Claim verification module
@@ -500,6 +501,7 @@ uv run rag_pipeline.py interactive
 ├── pdf_processor.py      # Docling PDF parsing
 ├── evaluation.py         # RAGAS evaluation
 ├── medical_test_set.json # 15 medical AI questions
+├── .streamlit/           # Streamlit config + secrets template
 └── eval_results/         # Evaluation outputs
 ```
 
