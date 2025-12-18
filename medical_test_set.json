@@ -1,0 +1,62 @@
+[
+  {
+    "question": "What is CheXNet?",
+    "expected_answer": "CheXNet is a 121-layer convolutional neural network designed to detect diseases from chest X-rays."
+  },
+  {
+    "question": "How many diseases can CheXNet diagnose?",
+    "expected_answer": "CheXNet can diagnose 14 thoracic pathologies."
+  },
+  {
+    "question": "What dataset was CheXNet trained on?",
+    "expected_answer": "CheXNet was trained on the ChestX-ray14 dataset."
+  },
+  {
+    "question": "What is ClinicalBERT?",
+    "expected_answer": "ClinicalBERT is a BERT model pre-trained on clinical notes for medical NLP tasks."
+  },
+  {
+    "question": "What database was ClinicalBERT pre-trained on?",
+    "expected_answer": "ClinicalBERT was pre-trained on clinical notes from the MIMIC-III database."
+  },
+  {
+    "question": "What task was ClinicalBERT evaluated on?",
+    "expected_answer": "ClinicalBERT was evaluated on 30-day hospital readmission prediction."
+  },
+  {
+    "question": "What is AdvProp used for?",
+    "expected_answer": "AdvProp is used for molecular property prediction in drug discovery."
+  },
+  {
+    "question": "What challenge did AdvProp participate in for COVID-19?",
+    "expected_answer": "AdvProp participated in the AI Cures challenge to discover antibiotics for COVID-19 related infections."
+  },
+  {
+    "question": "What types of molecular representations does AdvProp use?",
+    "expected_answer": "AdvProp uses graph-based molecular representations and SMILES sequence representations."
+  },
+  {
+    "question": "What metrics are used to evaluate CheXNet?",
+    "expected_answer": "CheXNet is evaluated using ROC-AUC scores for each pathology."
+  },
+  {
+    "question": "How does CheXNet compare to radiologists?",
+    "expected_answer": "CheXNet exceeded average radiologist performance on pneumonia detection."
+  },
+  {
+    "question": "What is the 2018 ISIC Challenge about?",
+    "expected_answer": "The 2018 ISIC Challenge focused on skin lesion analysis including segmentation and classification tasks."
+  },
+  {
+    "question": "What neural network architecture does CheXNet use?",
+    "expected_answer": "CheXNet uses a 121-layer DenseNet convolutional neural network architecture."
+  },
+  {
+    "question": "What is the purpose of pre-training ClinicalBERT on clinical notes?",
+    "expected_answer": "Pre-training helps ClinicalBERT learn clinical vocabulary, abbreviations, and patterns specific to medical documentation."
+  },
+  {
+    "question": "What deep learning methods does AdvProp use for molecules?",
+    "expected_answer": "AdvProp uses message passing neural networks for graphs and transformer models for SMILES sequences."
+  }
+]

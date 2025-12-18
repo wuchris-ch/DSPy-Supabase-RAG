@@ -1,6 +1,6 @@
 # DSPy Supabase RAG Pipeline
 
-A production-ready Retrieval-Augmented Generation system with hybrid search, neural reranking, and comprehensive evaluation.
+A production-ready Retrieval-Augmented Generation system with hybrid search, neural reranking, and comprehensive evaluation. Tested on medical AI research papers.
 
 ```
 Documents → Semantic Chunks → Vector Embeddings → Hybrid Retrieval → Reranking → LLM Generation
@@ -8,20 +8,32 @@ Documents → Semantic Chunks → Vector Embeddings → Hybrid Retrieval → Rer
 
 ---
 
-## Performance
+## Performance (Medical Papers)
 
 | Metric | Score | Description |
 |--------|-------|-------------|
-| **Answer Relevancy** | **92.5%** | Generated answers address the question |
-| **Faithfulness** | **91.7%** | Answers grounded in context (no hallucination) |
-| **Context Precision** | 76.9% | Retrieved chunks are relevant |
-| **Context Recall** | 70.4% | Coverage of relevant information |
+| **Faithfulness** | **98.3%** | Answers grounded in context (no hallucination) |
+| **Answer Relevancy** | **96.0%** | Generated answers address the question |
+| **Context Precision** | 93.6% | Retrieved chunks are relevant |
+| **Context Recall** | 93.3% | Coverage of relevant information |
+| **Overall** | **95.3%** | Weighted average |
 
-*Both Answer Relevancy and Faithfulness exceed 90%, the key metrics for production RAG systems.*
+*Evaluated on 15 medical AI questions using [RAGAS](https://docs.ragas.io/) with GPT-4o-mini as judge, DeepSeek-chat as generator average with 20 samples.*
 
-*Faithfulness measures how much the LLM "hallucinates", i.e. makes up information not present in the retrieved context. Higher = less hallucination.*
+*Test corpus: 6 arXiv papers on CheXNet (chest X-ray diagnosis), ClinicalBERT, AdvProp (drug discovery), medical imaging AI, skin cancer classification, and COVID-19 forecasting.*
 
-*Evaluated on 20 samples using [RAGAS](https://docs.ragas.io/) with GPT-4o-mini as judge, DeepSeek-chat as generator*
+### High-Stakes Mode (Confident-Lite)
+
+For medical/legal domains, the pipeline includes confidence-gated answering with optional abstention:
+
+```python
+rag = RAGSystem(faithful_mode="confident-lite")
+```
+
+| Mode | Faithfulness | Relevancy | Use Case |
+|------|--------------|-----------|----------|
+| Standard | 97.1% | 58.5% | General use |
+| **Confident-Lite** | **98.3%** | **96.0%** | Medical/Legal (recommended) |
 
 ---
 
@@ -199,13 +211,13 @@ Each piece solves a specific problem:
 
 How do we know if the system is working well? We use four metrics:
 
-- **Answer Relevancy (92.5%)**: Does the answer actually address what was asked? This is the most important metric.
+- **Faithfulness (98.3%)**: Is the answer grounded in the retrieved context, or is the AI making things up? Critical for medical/legal trust.
 
-- **Faithfulness (91.7%)**: Is the answer grounded in the retrieved context, or is the AI making things up? Critical for trust.
+- **Answer Relevancy (96.0%)**: Does the answer actually address what was asked?
 
-- **Context Precision (76.9%)**: Are the retrieved chunks actually relevant, or is the system pulling in junk?
+- **Context Precision (93.6%)**: Are the retrieved chunks actually relevant, or is the system pulling in junk?
 
-- **Context Recall (70.4%)**: Did we find all the relevant information, or did we miss some?
+- **Context Recall (93.3%)**: Did we find all the relevant information, or did we miss some?
 
 These are measured automatically using another LLM as a judge (RAGAS framework).
 
@@ -280,6 +292,180 @@ uv run evaluation.py full -f test_set.json -o results.json --faithful fast
 | `fast` | 3 | Batch verification, good balance |
 | `full` | N+3 | Individual verification, highest accuracy |
 
+---
+
+## Tuning for High-Stakes Domains
+
+For medical, legal, or financial RAGs where hallucination is unacceptable, you need **faithfulness >97%** while maintaining reasonable answer relevancy. This section covers tuning strategies.
+
+### The Faithfulness vs Relevancy Tradeoff
+
+Standard RAG optimizes for both metrics equally. High-stakes domains must **prioritize faithfulness** even at some cost to relevancy:
+
+| Mode | Faithfulness | Relevancy | Tradeoff |
+|------|--------------|-----------|----------|
+| Standard | 94.5% | 82.8% | Balanced |
+| Faithful (`fast`) | 95.6% | 82.9% | +1% faith, similar relevancy |
+| Confident (0.75 threshold) | **98.1%** | 91.1% | +4% faith, +8% relevancy* |
+| Confident (0.80 threshold) | **100%** | 98.3% | +6% faith, +16% relevancy* |
+
+*Higher relevancy because the system **abstains** on uncertain questions. Answered questions are more reliable.
+
+### Strategy 1: Claim Verification (Faithful Mode)
+
+Verifies every claim in the answer against retrieved context. Removes unsupported claims.
+
+```python
+rag = RAGSystem(faithful_mode="fast")  # 3 LLM calls per query
+# or
+rag = RAGSystem(faithful_mode="full")  # N+3 LLM calls (N = number of claims)
+```
+
+**Pipeline:**
+```
+Question → Generate Answer → Extract Claims → Verify Each Claim → Rewrite Answer
+```
+
+**Best for:** Domains where you must answer every question but cannot hallucinate.
+
+**Cost:** ~3x latency, ~3x LLM cost per query.
+
+### Strategy 2: Confidence-Gated RAG (Abstention)
+
+Computes a confidence score and **refuses to answer** when uncertain. Better to say "I don't know" than to hallucinate.
+
+```python
+rag = RAGSystem(faithful_mode="confident-lite", k=10)  # Recommended
+# or
+rag = RAGSystem(faithful_mode="confident", k=10)  # Full confidence checks
+```
+
+**Confidence signals:**
+- **Faithfulness score** (40%): What fraction of claims are verifiable?
+- **Context coverage** (30%): Does retrieved context address the question?
+- **Source agreement** (20%): Do sources contradict each other?
+- **Scope check** (10%): Is the question within the document domain?
+
+**Usage in code:**
+```python
+from confident_rag import ConfidentRAGModuleLite
+from retriever import HybridRetriever
+
+retriever = HybridRetriever()
+rag = ConfidentRAGModuleLite(
+    retriever,
+    k=10,  # Retrieve more for better coverage
+    confidence_threshold=0.75,  # Tune this (see below)
+)
+
+response = rag("What are the contraindications for this drug?")
+
+if response.abstained:
+    print(f"Cannot answer reliably: {response.abstention_reason}")
+else:
+    print(f"Answer ({response.confidence_score:.0%} confident): {response.answer}")
+```
+
+### Tuning the Confidence Threshold
+
+The threshold controls the abstention rate. Higher threshold = fewer answers but higher reliability.
+
+| Threshold | Faithfulness | Relevancy | Abstention Rate | Recommendation |
+|-----------|--------------|-----------|-----------------|----------------|
+| 0.70 | ~95% | ~85% | ~10% | General use |
+| **0.75** | **98%** | **91%** | **~20%** | **Medical/Legal (recommended)** |
+| 0.78 | ~99% | ~89% | ~35% | High liability |
+| 0.80 | 100% | 98% | ~50% | Zero tolerance for error |
+
+**Finding your threshold:**
+```bash
+# Test different thresholds on your eval set
+uv run evaluation.py full -f test_set.json -o results.json --faithful confident-lite
+
+# Manually test specific threshold in Python
+rag = ConfidentRAGModuleLite(retriever, confidence_threshold=0.78)
+```
+
+### Strategy 3: Combined Approach
+
+For maximum safety, combine retrieval tuning with confidence gating:
+
+```python
+from rag_pipeline import RAGSystem
+
+rag = RAGSystem(
+    faithful_mode="confident-lite",
+    k=10,  # More documents for better coverage
+    hybrid_retrieval=True,  # BM25 + Vector
+    # Higher BM25 weight for exact medical terminology
+)
+
+# In retriever.py, you can adjust:
+# bm25_weight=0.5  (up from 0.4)
+# vector_weight=0.5
+# over_retrieve_factor=5  (up from 4)
+```
+
+### Retrieval Tuning for High-Stakes
+
+| Parameter | Default | High-Stakes Setting | Why |
+|-----------|---------|---------------------|-----|
+| `k` | 5 | 8-10 | More context for better coverage |
+| `over_retrieve_factor` | 4 | 5-6 | More candidates for reranking |
+| `bm25_weight` | 0.4 | 0.5 | Exact terminology matters (drug names, legal terms) |
+| `reranker` | `llm` | `llm` | Keep LLM reranking for precision |
+
+### When to Use Each Strategy
+
+| Scenario | Strategy | Settings |
+|----------|----------|----------|
+| Medical diagnosis support | Confident (0.75-0.80) | `faithful_mode="confident-lite"` |
+| Legal document Q&A | Confident (0.75) | `faithful_mode="confident-lite"` |
+| Drug interaction lookup | Confident (0.80) | Zero tolerance, high threshold |
+| Financial compliance | Faithful + Confident | `faithful_mode="confident"` |
+| Internal knowledge base | Standard or Faithful | `faithful_mode="fast"` |
+| Customer support | Standard | `faithful_mode=None` |
+
+### Monitoring in Production
+
+Track these metrics to tune your threshold:
+
+```python
+# Log confidence scores
+response = rag(question)
+log({
+    "question": question,
+    "confidence": response.confidence_score,
+    "abstained": response.abstained,
+    "faithfulness": response.confidence_signals.faithfulness_score,
+    "coverage": response.confidence_signals.context_coverage,
+})
+
+# Adjust threshold based on:
+# 1. Abstention rate (target: 15-25% for medical)
+# 2. User feedback on wrong answers
+# 3. RAGAS evaluation scores
+```
+
+### Evaluation for High-Stakes
+
+```bash
+# Run evaluation with confident mode
+uv run evaluation.py full -f medical_test_set.json -o results.json --faithful confident-lite
+
+# Compare modes
+uv run evaluation.py full -f test_set.json -o baseline.json
+uv run evaluation.py full -f test_set.json -o faithful.json --faithful fast
+uv run evaluation.py full -f test_set.json -o confident.json --faithful confident-lite
+```
+
+**Target metrics for production medical RAG:**
+- Faithfulness: >97%
+- Answer Relevancy: >85%
+- Abstention Rate: 15-25%
+
+---
+
 ### Rate Limiting
 
 **DeepSeek:** No rate limits (pay-as-you-go). This is the default.
@@ -332,6 +518,7 @@ if elapsed < 6.5:
 DSPy-Supabase-RAG/
 ├── rag_pipeline.py       # RAGSystem, RAGModule
 ├── faithful_rag.py       # FaithfulRAG (claim verification)
+├── confident_rag.py      # Confidence-gated RAG (abstention)
 ├── retriever.py          # HybridRetriever, reranking
 ├── embeddings.py         # EmbeddingGenerator
 ├── pdf_processor.py      # PDFProcessor (Docling)

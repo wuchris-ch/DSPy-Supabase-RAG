@@ -1,12 +1,58 @@
 # Evaluation Results
 
-*20 samples, evaluated with GPT-4o-mini as judge*
-
 ---
 
 ## TL;DR
 
-**Use deepseek-chat.** Best balance of quality, speed, and cost.
+**Use confident-lite mode for medical/legal RAG.** 98%+ faithfulness with 96% answer relevancy.
+
+| Mode | Faithfulness | Answer Relevancy | Use Case |
+|------|--------------|------------------|----------|
+| **Confident-Lite** | **98.3%** | **96.0%** | Medical/Legal (recommended) |
+| Standard | 97.1% | 58.5% | General use |
+
+---
+
+## Medical Paper Evaluation (Latest)
+
+*15 questions on 6 arXiv medical AI papers, evaluated with GPT-4o-mini as judge*
+
+### Test Corpus
+
+| Paper | Topic | Chunks |
+|-------|-------|--------|
+| chest_xray_diagnosis.pdf | CheXNet, 121-layer CNN for X-ray diagnosis | 32 |
+| clinical_bert.pdf | ClinicalBERT for clinical NLP | 47 |
+| covid_forecasting.pdf | COVID-19 prediction models | 23 |
+| drug_discovery_ai.pdf | AdvProp for molecular property prediction | 81 |
+| medical_imaging_ai.pdf | AI in medical imaging review | 123 |
+| skin_cancer_classification.pdf | ISIC Challenge, skin lesion analysis | 28 |
+
+**Total: 334 chunks from 6 papers**
+
+### Results (Confident-Lite Mode)
+
+| Metric | Score |
+|--------|-------|
+| **Faithfulness** | **98.3%** |
+| **Answer Relevancy** | **96.0%** |
+| **Context Precision** | 93.6% |
+| **Context Recall** | 93.3% |
+| **Overall** | **95.3%** |
+
+### Configuration
+
+```python
+rag = RAGSystem(faithful_mode="confident-lite")
+# confidence_threshold=0.60
+# k=10 (retrieve more for medical coverage)
+```
+
+---
+
+## Original Benchmark (RAG/Docling Papers)
+
+*20 samples, evaluated with GPT-4o-mini as judge*
 
 | Model | Answer Relevancy | Faithfulness | Latency | Verdict |
 |-------|------------------|--------------|---------|---------|

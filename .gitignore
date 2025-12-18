@@ -21,3 +21,5 @@ __pycache__/
 results_history/
 mlruns/
 CLAUDE.md
+todo.md
+eval_results/

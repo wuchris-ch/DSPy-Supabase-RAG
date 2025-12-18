@@ -32,6 +32,13 @@ try:
 except ImportError:
     FAITHFUL_RAG_AVAILABLE = False
 
+# Optional confident RAG module (with abstention)
+try:
+    from confident_rag import ConfidentRAGModule, ConfidentRAGModuleLite, ConfidentRAGResponse
+    CONFIDENT_RAG_AVAILABLE = True
+except ImportError:
+    CONFIDENT_RAG_AVAILABLE = False
+
 # Optional MLflow integration
 try:
     from mlflow_tracking import MLflowTracker, MLflowConfig
@@ -545,6 +552,8 @@ class RAGSystem:
                 - None: Standard generation (default)
                 - "fast": Batch claim verification (3 LLM calls)
                 - "full": Individual claim verification (N+3 LLM calls, most accurate)
+                - "confident": Full confidence gating with abstention (for medical/legal)
+                - "confident-lite": Lighter confidence gating (fewer LLM calls)
         """
         load_dotenv()
 
@@ -579,7 +588,19 @@ class RAGSystem:
 
         # Setup RAG module
         self.faithful_mode = faithful_mode
-        if faithful_mode and FAITHFUL_RAG_AVAILABLE:
+        if faithful_mode in ("confident", "confident-lite") and CONFIDENT_RAG_AVAILABLE:
+            if faithful_mode == "confident":
+                self.rag = ConfidentRAGModule(retriever=self.retriever, k=k)
+            else:  # "confident-lite"
+                self.rag = ConfidentRAGModuleLite(retriever=self.retriever, k=k)
+            logger.info(f"Using ConfidentRAG module (mode={faithful_mode})")
+        elif faithful_mode in ("confident", "confident-lite") and not CONFIDENT_RAG_AVAILABLE:
+            logger.warning("confident mode requested but confident_rag.py not found, falling back to faithful")
+            if FAITHFUL_RAG_AVAILABLE:
+                self.rag = FaithfulRAGModuleFast(retriever=self.retriever, k=k)
+            else:
+                self.rag = RAGModule(retriever=self.retriever, use_reasoning=True, k=k)
+        elif faithful_mode and FAITHFUL_RAG_AVAILABLE:
             if faithful_mode == "fast":
                 self.rag = FaithfulRAGModuleFast(retriever=self.retriever, k=k)
             else:  # "full"
@@ -770,8 +791,8 @@ def main():
                               help="Do not store this Q&A as a FAQ chunk")
     query_parser.add_argument("--mlflow", action="store_true",
                               help="Enable MLflow tracking")
-    query_parser.add_argument("--faithful", choices=["fast", "full"],
-                              help="Enable claim verification (fast=batch, full=individual)")
+    query_parser.add_argument("--faithful", choices=["fast", "full", "confident", "confident-lite"],
+                              help="Enable claim verification (fast=batch, full=individual, confident=with abstention)")
 
     # Interactive command
     interactive_parser = subparsers.add_parser("interactive", help="Start interactive mode")
@@ -779,8 +800,8 @@ def main():
                                     help="Do not store Q&A from this session")
     interactive_parser.add_argument("--mlflow", action="store_true",
                                     help="Enable MLflow tracking")
-    interactive_parser.add_argument("--faithful", choices=["fast", "full"],
-                                    help="Enable claim verification (fast=batch, full=individual)")
+    interactive_parser.add_argument("--faithful", choices=["fast", "full", "confident", "confident-lite"],
+                                    help="Enable claim verification (fast=batch, full=individual, confident=with abstention)")
     
     # Parse args
     args = parser.parse_args()

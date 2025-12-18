@@ -50,6 +50,9 @@ class EvalSample:
     contexts: list[str] = field(default_factory=list)  # Retrieved contexts
     answer: str = ""  # Generated answer
     metadata: dict = field(default_factory=dict)
+    abstained: bool = False  # Whether system refused to answer
+    abstention_reason: str = ""  # Why it abstained
+    confidence_score: float = 1.0  # Confidence if using confident mode
 
 
 @dataclass
@@ -59,12 +62,17 @@ class ComponentScores:
     context_precision: float = 0.0  # Are retrieved docs relevant?
     context_recall: float = 0.0  # Did we get all relevant docs?
     context_relevance: float = 0.0  # Overall context quality
-    
+
     # Generation metrics
     faithfulness: float = 0.0  # Is answer grounded in context?
     answer_relevancy: float = 0.0  # Does answer address the question?
     answer_correctness: float = 0.0  # Is answer factually correct?
-    
+
+    # Abstention metrics (for confident mode)
+    abstention_rate: float = 0.0  # How often system refused to answer
+    answered_faithfulness: float = 0.0  # Faithfulness only for non-abstained
+    avg_confidence: float = 0.0  # Average confidence when answering
+
     # Combined
     overall: float = 0.0
 
@@ -79,6 +87,14 @@ class EvalResult:
     config: dict = field(default_factory=dict)
     
     def __str__(self) -> str:
+        abstention_section = ""
+        if self.scores.abstention_rate > 0:
+            abstention_section = f"""╠══════════════════════════════════════════════════════════════╣
+║  ABSTENTION METRICS                                          ║
+║  ├─ Abstention Rate:   {self.scores.abstention_rate:>6.1%}                            ║
+║  ├─ Answered Faith.:   {self.scores.answered_faithfulness:>6.1%}                            ║
+║  └─ Avg Confidence:    {self.scores.avg_confidence:>6.1%}                            ║
+"""
         return f"""
 ╔══════════════════════════════════════════════════════════════╗
 ║  RAG Pipeline Evaluation Results                             ║
@@ -94,7 +110,7 @@ class EvalResult:
 ║  ├─ Faithfulness:      {self.scores.faithfulness:>6.1%}                            ║
 ║  ├─ Answer Relevancy:  {self.scores.answer_relevancy:>6.1%}                            ║
 ║  └─ Answer Correctness:{self.scores.answer_correctness:>6.1%}                            ║
-╠══════════════════════════════════════════════════════════════╣
+{abstention_section}╠══════════════════════════════════════════════════════════════╣
 ║  Samples Evaluated: {self.num_samples:<5}                                   ║
 ║  Timestamp: {self.timestamp[:19]:<20}                        ║
 ╚══════════════════════════════════════════════════════════════╝
@@ -123,6 +139,8 @@ class EvalResult:
     
     def save(self, path: str | Path):
         """Save results to JSON file."""
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, 'w') as f:
             json.dump(self.to_dict(), f, indent=2)
         logger.info(f"Results saved to {path}")
@@ -801,31 +819,46 @@ class PipelineEvaluator:
         Args:
             questions: List of questions to ask
             delay_seconds: Delay between queries (default 0, not needed for DeepSeek)
-            
+
         Returns:
             List of EvalSample with answers and contexts
         """
         if self.rag_system is None:
             raise ValueError("RAG system not provided")
-        
+
         samples = []
         for i, q in enumerate(questions):
             try:
                 result = self.rag_system.query(q)
+
+                # Handle abstention (ConfidentRAG mode)
+                abstained = getattr(result, 'abstained', False)
+                abstention_reason = getattr(result, 'abstention_reason', '')
+                confidence = getattr(result, 'confidence_score', 1.0)
+
+                # For abstained responses, use the abstention message as answer for eval
+                if abstained:
+                    answer = f"I cannot reliably answer this question. {abstention_reason}"
+                else:
+                    answer = result.answer
+
                 samples.append(EvalSample(
                     question=q,
-                    answer=result.answer,
+                    answer=answer,
                     contexts=[c.content for c in result.retrieved_chunks],
                     ground_truth="",  # Will be filled if available
+                    abstained=abstained,
+                    abstention_reason=abstention_reason,
+                    confidence_score=confidence,
                 ))
             except Exception as e:
                 logger.warning(f"Error on question '{q}': {e}")
                 samples.append(EvalSample(question=q, answer="", ground_truth=""))
-            
+
             # Rate limiting delay between queries (skip after last one)
             if delay_seconds > 0 and i < len(questions) - 1:
                 time.sleep(delay_seconds)
-        
+
         return samples
     
     def quick_eval(
@@ -907,12 +940,29 @@ class PipelineEvaluator:
         for sample, test in zip(samples, test_set):
             sample.ground_truth = test.get("expected_answer", "")
 
+        # Calculate abstention metrics
+        abstained_samples = [s for s in samples if s.abstained]
+        answered_samples = [s for s in samples if not s.abstained]
+        abstention_rate = len(abstained_samples) / len(samples) if samples else 0
+        avg_confidence = (
+            sum(s.confidence_score for s in answered_samples) / len(answered_samples)
+            if answered_samples else 0
+        )
+
+        if verbose and abstained_samples:
+            print(f"  Abstained on {len(abstained_samples)}/{len(samples)} questions ({abstention_rate:.1%})")
+            print(f"  Average confidence on answered: {avg_confidence:.1%}")
+
+        # For evaluation, only evaluate non-abstained samples
+        # Abstention = refusing to hallucinate, which is good for faithfulness
+        eval_samples = answered_samples if answered_samples else samples
+
         # Try RAGAS first
         ragas = self._get_ragas()
         if ragas:
             if verbose:
                 print("Using RAGAS evaluation (OpenAI detected)")
-            result = ragas.evaluate(samples)
+            result = ragas.evaluate(eval_samples)
         else:
             # Fallback to LLM-as-Judge + SemanticF1
             if verbose:
@@ -944,6 +994,14 @@ class PipelineEvaluator:
                 judge_result.scores.overall = sum(valid) / len(valid) if valid else 0
 
             result = judge_result
+
+        # Add abstention metrics
+        result.scores.abstention_rate = abstention_rate
+        result.scores.answered_faithfulness = result.scores.faithfulness
+        result.scores.avg_confidence = avg_confidence
+
+        # Update num_samples to reflect actual evaluation
+        result.num_samples = len(samples)
 
         # Log to MLflow if enabled
         if self._mlflow_tracker:
@@ -1061,8 +1119,8 @@ def main():
     quick_parser.add_argument("--mlflow", action="store_true",
                               help="Enable MLflow tracking")
     quick_parser.add_argument("--run-name", help="MLflow run name")
-    quick_parser.add_argument("--faithful", choices=["fast", "full"],
-                              help="Enable claim verification (fast=batch, full=individual)")
+    quick_parser.add_argument("--faithful", choices=["fast", "full", "confident", "confident-lite"],
+                              help="Enable claim verification (fast=batch, full=individual, confident=with abstention)")
     quick_parser.add_argument("--evaluator-model", default="gpt-4o-mini",
                               help="Model for RAGAS evaluation (default: gpt-4o-mini)")
     quick_parser.add_argument("--reasoning-effort", default=None,
@@ -1073,8 +1131,8 @@ def main():
     full_parser = subparsers.add_parser("full", help="Full evaluation with ground truth")
     full_parser.add_argument("--file", "-f", required=True,
                              help="JSON file with test set")
-    full_parser.add_argument("--output", "-o", default="eval_results.json",
-                             help="Output file for results")
+    full_parser.add_argument("--output", "-o", default="eval_results/results.json",
+                             help="Output file for results (default: eval_results/results.json)")
     full_parser.add_argument("--delay", "-d", type=float, default=0,
                              help="Delay between queries in seconds (default: 0)")
     full_parser.add_argument("--provider", "-p", default="deepseek",
@@ -1085,8 +1143,8 @@ def main():
     full_parser.add_argument("--mlflow", action="store_true",
                              help="Enable MLflow tracking")
     full_parser.add_argument("--run-name", help="MLflow run name")
-    full_parser.add_argument("--faithful", choices=["fast", "full"],
-                             help="Enable claim verification (fast=batch, full=individual)")
+    full_parser.add_argument("--faithful", choices=["fast", "full", "confident", "confident-lite"],
+                             help="Enable claim verification (fast=batch, full=individual, confident=with abstention)")
     full_parser.add_argument("--evaluator-model", default="gpt-4o-mini",
                              help="Model for RAGAS evaluation (default: gpt-4o-mini)")
     full_parser.add_argument("--reasoning-effort", default=None,
